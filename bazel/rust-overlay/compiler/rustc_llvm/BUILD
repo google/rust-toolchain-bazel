@@ -25,8 +25,6 @@ exports_files([
     "BUILD",
 ])
 
-licenses(["restricted"])
-
 rust_library(
     name = "rustc_llvm",
     srcs = glob(

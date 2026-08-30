@@ -290,12 +290,6 @@ extra_rust_analyzer_kwargs = {
     "proc-macro-srv-cli": {
         "enable_features": ["in-rust-tree"],
     },
-    "stdx": {
-        "dep_overrides": {
-            # Windows only, not in //third_party/rust/, so just override it with a bogus value.
-            "miow": "//devtools/rust/toolchain/samples:boring_rust_library_with_name",
-        },
-    },
 }
 
 extra_rust_analyzer_rustc_env = {
