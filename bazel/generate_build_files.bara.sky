@@ -1,0 +1,577 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Scripts to generate BUILD files for the toolchain.
+
+# TODO
+
+# Identifiers for separate parts of the toolchain that we generate BUILD files for.
+tools = [
+    "compiler",
+    "build_helper",
+    "rustfmt",
+    "rustdoc",
+    "clippy",
+    "compiletest",
+    "miropt-test-tools",
+    "rust-analyzer",
+]
+
+# Path to a subdirectory under the root rust checkout that contains all
+# crates of the tool.
+tool_path = {
+    "compiler": "compiler",
+    "build_helper": "src",
+    "rustfmt": "src/tools",
+    "rustdoc": "src",
+    "clippy": "src/tools",
+    "compiletest": "src/tools",
+    "miropt-test-tools": "src/tools",
+    "rust-analyzer": "src/tools/rust-analyzer/crates",
+}
+
+# Packages to generate BUILD files for.
+#
+# The following BUILD files are maintained manually:
+# * rustc_llvm/BUILD: contains hooks to build against a user-supplied LLVM
+# * rustc/BUILD: defines the main binaries.
+# * rustc_proc_macro/BUILD: it's a special "bridge" to the standard library
+#   proc_macro crate consumed by the compiler.
+#
+# TODO: Automatically discover these.
+compiler_pkgs = [
+    # check_toolchain_3p_deps compiler/
+    "rustc_structures",
+    "rustc_graphviz",
+    "rustc_fs_util",
+    "rustc_error_codes",
+    "rustc_lexer",
+    "rustc_macros",
+    "rustc_hashes",
+    "rustc_serialize",
+    "rustc_index_macros",
+    "rustc_index",
+    "rustc_arena",
+    "rustc_data_structures",
+    "rustc_span",
+    "rustc_ast_ir",
+    "rustc_type_ir_macros",
+    "rustc_type_ir",
+    "rustc_ast",
+    "rustc_feature",
+    "rustc_abi",
+    "rustc_target",
+    "rustc_parse_format",
+    "rustc_baked_icu_data",
+    "rustc_error_messages",
+    "rustc_hir",
+    "rustc_hir_id",
+    "rustc_lint_defs",
+    "rustc_ast_pretty",
+    "rustc_errors",
+    "rustc_session",
+    "rustc_hir_pretty",
+    "rustc_parse",
+    "rustc_next_trait_solver",
+    "rustc_attr_parsing",
+    "rustc_attr_ir",
+    "rustc_middle",
+    "rustc_ast_lowering",
+    "rustc_ast_passes",
+    "rustc_expand",
+    "rustc_builtin_macros",
+    "rustc_infer",
+    "rustc_metadata",
+    "rustc_incremental",
+    "rustc_symbol_mangling",
+    "rustc_query_impl",
+    "rustc_resolve",
+    "rustc_transmute",
+    "rustc_trait_selection",
+    "rustc_mir_dataflow",
+    "rustc_const_eval",
+    "rustc_sanitizers",
+    "rustc_lint",
+    "rustc_ty_utils",
+    "rustc_ty_walk",
+    "rustc_traits",
+    "rustc_pattern_analysis",
+    "rustc_mir_build",
+    "rustc_hir_analysis",
+    "rustc_privacy",
+    "rustc_passes",
+    "rustc_mir_transform",
+    "rustc_borrowck",
+    "rustc_monomorphize",
+    "rustc_codegen_ssa",
+    "rustc_codegen_llvm",
+    "rustc_hir_typeck",
+    "rustc_interface",
+    "rustc_log",
+    "rustc_public",
+    "rustc_public_bridge",
+    "rustc_driver_impl",
+    "rustc_thread_pool",
+    "rustc_proc_macro",
+    "rustc_crate_store",
+]
+
+# Extra arguments for compiler packages.
+#
+# For buildozer commands, use `extra_compiler_buildozer_cmds`.
+#
+# version_overrides are generally used to select more recent version available
+extra_compiler_kwargs = {
+    "rustc_index_macros": {
+        "enable_features": ["nightly"],
+    },
+    "rustc_transmute": {
+        "enable_features": ["rustc"],
+    },
+    "rustc_codegen_ssa": {
+        "version_overrides": {
+            "cc": "1.2",
+        },
+    },
+    "rustc_codegen_llvm": {
+        "version_overrides": {
+            "gimli": "0.31",
+        },
+    },
+    "rustc_log": {
+        "version_overrides": {
+            "tracing-core": "0.1",
+        },
+    },
+}
+
+def add_default_pkg_overrides(pkg_extra_kwargs):
+    default_version_overrides = {
+        # Upstream rustc pins libc in some places https://github.com/bytecodealliance/rustix/issues/1496
+        # We don't appear affected, and need a newer version of libc anyways.
+        "libc": "0.2",
+    }
+
+    default_ignore_dependencies = [
+        # Needed for building rustc to run on windows, which we don't support now.
+        "windows",
+    ]
+
+    version_overrides = default_version_overrides | pkg_extra_kwargs.get("version_overrides", {})
+    ignore_dependencies = default_ignore_dependencies + pkg_extra_kwargs.get("ignore_dependencies", [])
+
+    return pkg_extra_kwargs | {
+        "version_overrides": version_overrides,
+        "ignore_dependencies": ignore_dependencies,
+    }
+
+# rustfmt setup
+
+rustfmt_pkgs = [
+    # check_toolchain_3p_deps src/tools/
+    "rustfmt/config_proc_macro",
+    "rustfmt",
+]
+
+extra_rustfmt_kwargs = {}
+
+extra_rustfmt_rustc_env = {
+    "rustfmt": {
+        "bin/rustfmt": {
+        },
+    },
+}
+
+# clippy setup
+
+clippy_pkgs = [
+    # check_toolchain_3p_deps src/tools/
+    "clippy",
+    "clippy/clippy_config",
+    "clippy/clippy_lints",
+    "clippy/clippy_utils",
+    "clippy/rustc_tools_util",
+    "clippy/declare_clippy_lint",
+]
+
+extra_clippy_rustc_env = {
+    "clippy": {
+        "bin/clippy_driver": {
+            "COMMIT_DATE": "",
+            "GIT_HASH": "",
+            "PROFILE": "debug",
+            "RUSTC_RELEASE_CHANNEL": "nightly",
+        },
+        "bin/compile_test": {
+            "COMMIT_DATE": "",
+            "GIT_HASH": "",
+            "PROFILE": "debug",
+            "RUSTC_RELEASE_CHANNEL": "nightly",
+        },
+    },
+}
+
+# compiletest setup
+
+compiletest_pkgs = [
+    # check_toolchain_3p_deps src/tools/
+    "compiletest",
+]
+
+extra_compiletest_rustc_env = {
+    "compiletest": {
+        "compiletest": {
+            "CFG_VIRTUAL_RUST_SOURCE_BASE_DIR": "third_party/rust_toolchain",
+        },
+        "bin/compiletest": {
+            "CFG_VIRTUAL_RUST_SOURCE_BASE_DIR": "third_party/rust_toolchain",
+        },
+    },
+}
+
+extra_compiletest_kwargs = {
+    "compiletest": {
+        "ignore_dependencies": ["windows", "miow"],
+    },
+}
+
+# miropt setup
+
+miropt_test_tools_pkgs = [
+    # check_toolchain_3p_deps src/tools/
+    "miropt-test-tools",
+]
+
+# rustdoc setup
+
+rustdoc_pkgs = [
+    # check_toolchain_3p_deps src/
+    "librustdoc",
+    "rustdoc-json-types",
+    "tools/rustdoc",
+]
+
+# rust-analyzer setup
+
+rust_analyzer_pkgs = [
+    # check_toolchain_3p_deps src/tools/rust-analyzer/crates/ src/tools/rust-analyzer/
+    "proc-macro-srv-cli",
+    "proc-macro-srv",
+    "proc-macro-api",
+    "paths",
+    "tt",
+    "stdx",
+    "span",
+    "intern",
+    "vfs",
+    "syntax",
+    "parser",
+    "edition",
+]
+
+extra_rust_analyzer_kwargs = {
+    "proc-macro-api": {
+        "enable_features": ["in-rust-tree"],
+    },
+    "proc-macro-srv": {
+        "enable_features": ["in-rust-tree"],
+    },
+    "proc-macro-srv-cli": {
+        "enable_features": ["in-rust-tree"],
+    },
+}
+
+extra_rust_analyzer_rustc_env = {
+    "proc-macro-srv": {
+        "proc_macro_srv": {
+            "RUSTC_VERSION": "unused",
+        },
+    },
+}
+
+# Top-level configuration.
+
+tool_pkgs = {
+    "compiler": compiler_pkgs,
+    "build_helper": build_helper_pkgs,
+    "rustfmt": rustfmt_pkgs,
+    "rustdoc": rustdoc_pkgs,
+    "clippy": clippy_pkgs,
+    "compiletest": compiletest_pkgs,
+    "miropt-test-tools": miropt_test_tools_pkgs,
+    "rust-analyzer": rust_analyzer_pkgs,
+}
+
+all_pkgs = [
+    pkg
+    for tool in tools
+    for pkg in tool_pkgs[tool]
+]
+
+extra_rustdoc_rustc_env = {
+    "librustdoc": {
+        "librustdoc": {
+            "DOC_RUST_LANG_ORG_CHANNEL": "nightly",
+        },
+    },
+}
+
+tool_extra_buildozer_cmds = {
+    "compiler": extra_compiler_buildozer_cmds,
+    "build_helper": extra_build_helper_buildozer_cmds,
+    "rustfmt": extra_rustfmt_buildozer_cmds,
+    "rustdoc": extra_rustdoc_buildozer_cmds,
+    "clippy": extra_clippy_buildozer_cmds,
+    "compiletest": extra_compiletest_buildozer_cmds,
+    "miropt-test-tools": {},
+    "rust-analyzer": extra_rust_analyzer_buildozer_cmds,
+}
+
+tool_extra_kwargs = {
+    "compiler": extra_compiler_kwargs,
+    "build_helper": {},
+    "rustfmt": extra_rustfmt_kwargs,
+    "rustdoc": {},
+    "clippy": {},
+    "compiletest": extra_compiletest_kwargs,
+    "miropt-test-tools": {},
+    "rust-analyzer": extra_rust_analyzer_kwargs,
+}
+
+tool_extra_rustc_env = {
+    "compiler": extra_compiler_rustc_env,
+    "build_helper": {},
+    "rustfmt": extra_rustfmt_rustc_env,
+    "rustdoc": extra_rustdoc_rustc_env,
+    "clippy": extra_clippy_rustc_env,
+    "compiletest": extra_compiletest_rustc_env,
+    "miropt-test-tools": {},
+    "rust-analyzer": extra_rust_analyzer_rustc_env,
+}
+
+def _generate_stdlib_tests_impl(ctx):
+    std_tests_dir = "TODO/rust_toolchain/library/std/tests"
+
+    standalone_tests_paths = ctx.run(glob([std_tests_dir + "/*.rs"]))
+    suite_tests_paths = ctx.run(glob([std_tests_dir + "/*/lib.rs"]))
+
+    test_names = []
+    test_map = {}
+
+    for p in standalone_tests_paths:
+        path_str = p.path
+        filename = path_str.split("/")[-1]
+        test_name = filename.removesuffix(".rs")
+        if test_name == "common":
+            continue
+        test_names.append(test_name)
+        test_map[test_name] = {
+            "name": test_name,
+            "path": "std/tests/" + filename,
+            "is_suite": False,
+        }
+
+    for p in suite_tests_paths:
+        path_str = p.path
+        parts = path_str.split("/")
+        suite_name = parts[-2]
+        test_names.append(suite_name)
+        test_map[suite_name] = {
+            "name": suite_name,
+            "path": "std/tests/" + suite_name + "/lib.rs",
+            "is_suite": True,
+            "dir": "std/tests/" + suite_name,
+        }
+
+    sorted_names = sorted(test_names)
+
+    bzl_lines = [
+        "# Generated by Copybara. DO NOT EDIT.",
+        '"""Generated Rust standard library tests."""',
+        "",
+        'load("TODO/bazel_rules/rules_rust/rust:defs.bzl", "rust_test")',
+        "",
+        "# buildifier: disable=unused-variable",
+        "def define_generated_tests(name = None):",
+        '    """Defines generated rust_test targets for the standard library.',
+        "",
+        "    Args:",
+        "        name: Unused name parameter required for macro convention.",
+        '    """',
+    ]
+
+    extra_flags = {
+        "sync": ["-Zcrate-attr=feature(sync_poison_mod)"],
+    }
+
+    extra_args = {
+        "sync": [
+            # timeouts
+            "--skip=condvar::nonpoison_timeout_nanoseconds",
+            "--skip=condvar::nonpoison_wait_timeout_wait",
+            "--skip=condvar::nonpoison_wait_timeout_wake",
+            "--skip=condvar::poison_timeout_nanoseconds",
+            "--skip=condvar::poison_wait_timeout_wait",
+            "--skip=condvar::poison_wait_timeout_wake",
+            "--skip=mutex::poison_wait_timeout_wait",
+            "--skip=rwlock::nonpoison_test_downgrade_observe",
+            "--skip=rwlock::poison_test_downgrade_observe",
+            "--skip=rwlock::test_rwlock_max_readers",
+            # failures
+            "--skip=rwlock::nonpoison_test_downgrade_atomic",
+            "--skip=rwlock::nonpoison_test_downgrade_basic",
+            "--skip=rwlock::poison_test_downgrade_atomic",
+            "--skip=rwlock::poison_test_downgrade_basic",
+        ],
+        "thread": ["--skip=sleep_very_long"],
+    }
+
+    extra_crate_names = {
+        "type-name-unsized": "type_name_unsized",
+    }
+
+    for name in sorted_names:
+        t = test_map[name]
+        path = t["path"]
+        is_suite = t["is_suite"]
+
+        if is_suite:
+            srcs_val = 'native.glob(["' + t["dir"] + '/**/*.rs"]) + ["std/tests/common/mod.rs"]'
+        else:
+            srcs_val = '["' + path + '", "std/tests/common/mod.rs"]'
+
+        deps_val = [
+            '"TODO/rust/rand/v0_9:rand"',
+            '"TODO/rust/rand_xorshift/v0_4:rand_xorshift"',
+        ]
+
+        flags = []
+        if name in extra_flags:
+            flags = extra_flags[name]
+
+        if flags:
+            flags_val = "[" + ", ".join(['"' + f + '"' for f in flags]) + "]"
+        else:
+            flags_val = "[]"
+
+        args_lines = []
+        if name in extra_args:
+            args_entries = extra_args[name]
+            has_comments = any([a.startswith("#") for a in args_entries])
+            if has_comments or len(args_entries) > 1:
+                args_lines.append("        args = [")
+                for a in args_entries:
+                    if a.startswith("#"):
+                        args_lines.append("            " + a)
+                    else:
+                        args_lines.append('            "' + a + '",')
+                args_lines.append("        ],")
+            else:
+                args_lines.append('        args = ["' + args_entries[0] + '"],')
+
+        crate_name = extra_crate_names.get(name, None)
+        crate_name_line = ('        crate_name = "' + crate_name + '",\n') if crate_name else ""
+
+        test_lines = [
+            "    rust_test(",
+            '        name = "std_' + name + '_test",',
+            "        srcs = " + srcs_val + ",",
+        ]
+        if args_lines:
+            test_lines.extend(args_lines)
+        if crate_name_line:
+            test_lines.append(crate_name_line.rstrip())
+        test_lines.extend([
+            '        crate_root = "' + path + '",',
+            '        edition = "2024",',
+            "        rustc_flags = " + flags_val + ",",
+            "        deps = [" + ", ".join(deps_val) + "],",
+            "    )",
+            "",
+        ])
+
+        bzl_lines.extend(test_lines)
+
+    library_path = "TODO/rust_toolchain/library"
+
+    ctx.write_path(
+        ctx.new_path(library_path + "/generated_tests.bzl"),
+        "\n".join(bzl_lines) + "\n",
+    )
+
+    ctx.run(format.buildifier(paths = [
+        library_path + "/generated_tests.bzl",
+    ]))
+
+def generate_stdlib_tests():
+    return core.dynamic_transform(
+        _generate_stdlib_tests_impl,
+        params = {},
+    )
+
+def update_build_file(tool, pkg):
+    path = tool_path[tool] + "/" + pkg
+    return [
+        core.dynamic_transform(
+            lambda ctx: ctx.console.info("Updating BUILD file for {}".format(path)),
+        ),
+        update_crate_build_file(
+            pkg,
+            "TODO/rust_toolchain/" + path,
+        ),
+    ]
+
+def generate_build_files_transformations(tools = tools, pkgs = all_pkgs):
+    transformations = [
+        tr
+        for tool in tools
+        for pkg in tool_pkgs[tool]
+        if pkg in pkgs
+        for tr in update_build_file(tool, pkg)
+    ]
+    transformations.append(generate_stdlib_tests())
+    return transformations
+
+files_glob = glob([
+    "TODO/rust_toolchain/compiler/**",
+    "TODO/rust_toolchain/src/build_helper/**",
+    "TODO/rust_toolchain/src/shim_utils/**",
+    "TODO/rust_toolchain/src/tools/rustfmt/**",
+    "TODO/rust_toolchain/src/librustdoc/**",
+    "TODO/rust_toolchain/src/rustdoc-json-types/**",
+    "TODO/rust_toolchain/src/tools/rustdoc/**",
+    "TODO/rust_toolchain/src/tools/clippy/**",
+    "TODO/rust_toolchain/src/tools/compiletest/**",
+    "TODO/rust_toolchain/src/tools/miropt-test-tools/**",
+    "TODO/rust_toolchain/src/tools/rust-analyzer/**",
+    "TODO/rust_toolchain/library/*.bzl",
+    "TODO/rust_toolchain/library/std/tests/**",
+])
+
+def generate_build_files_workflow(
+        name = "generate_build_files",
+        tools = tools,
+        pkgs = all_pkgs):
+    return core.workflow(
+        name = name,
+        origin = piper.origin(),
+        origin_files = files_glob,
+        destination_files = files_glob,
+        destination = piper.destination(),
+        authoring = authoring.overwrite("Foo Bar <noreply@foobar.com>"),
+        transformations = [
+            # Needed for workflows with origin piper.
+            leakr.disable_check("piper-to-piper"),
+        ] + generate_build_files_transformations(tools, pkgs),
+    )

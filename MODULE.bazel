@@ -1,0 +1,31 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+module(name = "rust-toolchain-bazel")
+
+###############################################################################
+# Rust
+###############################################################################
+
+# We use copybara to generate the Bazel BUILD files for the Rust toolchain.
+# see: https://registry.bazel.build/modules/copybara/
+# TODO: There have been a number of releases to copybara since 2025-07-28, why
+# are those not reflected in the bazel integration?
+bazel_dep(name = "copybara", version = "0.0.0-20250728-6672ce2")
+bazel_dep(name = "rust-raw")
+git_override(
+    module_name = "rust-raw",
+    build_file_content = "# empty",
+    remote = "https://github.com/rust-lang/rust.git",
+)
